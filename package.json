@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "google-closure-compiler": "^20230802.0.0",
+    "uglify-js": "^3.17.4"
+  }
+}
