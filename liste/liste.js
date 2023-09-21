@@ -20,43 +20,48 @@ const NodeURLleri = {
 };
 
 /**
- * @param {string} ağ TCKT'nin sorgulanacağı ağ kodu
- * @param {string} adres TCKT sahibinin adresi
+ * @param {!Array<string>} adresler
+ * @return {!Object<string, !Array<string>>} her bir adres için o adrese denk
+ *     gelen bütün KimlikDAO-IPFS hashleri. Dikkat edersek bir adrese en fazla
+ *     6 tane hash denk gelebilir.
  */
-const tekAdresinTCKTsiniYaz = (ağ, adres) => jsonrpc
-  .call(NodeURLleri[ağ], "eth_call", [
-    /** @type {!eth.Transaction} */ ({
-      to: TCKT_ADDR,
-      data: "0xc50a1514" + evm.address(adres),
-    }), "latest"
-  ])
-  .then(
-    (handle) => console.log(handle),
-    (err) => console.error(err)
-  );
+const handlelarıBul = async (adresler) => {
+  const sonuçlar = {}; // Her ağ için sonuçları saklayacak nesne
 
-/**
- * @param {string} ağ TCKTnin sorgulanacağı ağ kodu
- * @param {!Array<string>} adresler TCKT sahiplerinin adresleri
- */
-const ikiAdresinTCKTsiniYaz = (ağ, adresler) => jsonrpc
-  .callMulti(NodeURLleri[ağ], "eth_call", [
-    [/** @type {!eth.Transaction} */({
-      to: TCKT_ADDR,
-      data: "0xc50a1514" + evm.address(adresler[0])
-    }), "latest"],
-    [/** @type {!eth.Transaction} */({
-      to: TCKT_ADDR,
-      data: "0xc50a1514" + evm.address(adresler[1])
-    }), "latest"]
-  ])
-  .then(
-    (/** @type {!Array<string>} */ handles) => console.log(handles),
-    (err) => console.error(err)
-  );
+  // Her ağı dolaşarak adresleri sorgulandı.
+  for (const ağKodu in NodeURLleri) {
+    sonuçlar[ağKodu] = []; // Her ağ için sonuçları saklayacak dizi
 
-tekAdresinTCKTsiniYaz("0xa86a", "0x9697bde39a925ee3feb7a1d6230b00fbed99fd31");
-ikiAdresinTCKTsiniYaz("0x38", [
-  "0x026Aaa49B4200CD5a8227649BE52d91280cDF526",
-  "0x5304eA777B594AFEa13717cf625E96263Cb86066"
-]);
+    // Her adrese yapılan sorgular map kullanılarak bir dizi Promise oluşturuldu.
+    const sorgular = adresler.map((adres) =>
+      jsonrpc.call(NodeURLleri[ağKodu], "eth_call", [
+        {
+          to: TCKT_ADDR,
+          data: "0xc50a1514" + evm.address(adres),
+        },
+        "latest",
+      ])
+    );
+
+    // Bütün sorgular eş zamanlı olarak çalışır.
+    await Promise.all(
+      sorgular.map(async (sorgu, index) => {
+        try {
+          const handle = await sorgu;
+          sonuçlar[ağKodu][index] = handle;
+        } catch (err) {
+          console.log(`Hata oluştu: ${err}`);
+        }
+      })
+    );
+  }
+
+  return sonuçlar;
+};
+
+// Adresleri alıp handleları bulur.
+fetch("https://sorular.kimlikdao.org/adresler")
+  .then((res) => res.json())
+  .then(handlelarıBul)
+  .then(console.log)
+  .catch((err) => console.error(`Adresleri alırken hata oluştu: ${err}`));
