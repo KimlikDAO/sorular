@@ -26,27 +26,34 @@ const NodeURLleri = {
  *     6 tane hash denk gelebilir.
  */
 const handlelarıBul = async (adresler) => {
-  const sonuçlar = {}; // Sonuçları tutacak obje.
+  const sonuçlar = {}; // Her ağ için sonuçları saklayacak nesne
 
-  // Her ağı dolaşıp adresleri sorgulanır.
+  // Her ağı dolaşarak adresleri sorgulandı.
   for (const ağKodu in NodeURLleri) {
-    sonuçlar[ağKodu] = []; // Her ağ için boş bir sonuç listesi oluşturulur.
+    sonuçlar[ağKodu] = []; // Her ağ için sonuçları saklayacak dizi
 
-    // Her adres sorgulanır.
-    for (const adres of adresler) {
-      try {
-        const handle = await jsonrpc.call(NodeURLleri[ağKodu], "eth_call", [
-          {
-            to: TCKT_ADDR,
-            data: "0xc50a1514" + evm.address(adres),
-          },
-          "latest",
-        ]);
-        sonuçlar[ağKodu].push(handle); // Sonuç listeye eklenir.
-      } catch (err) {
-        console.log(`Hata oluştu: ${err}`);
-      }
-    }
+    // Her adrese yapılan sorgular map kullanılarak bir dizi Promise oluşturuldu.
+    const sorgular = adresler.map((adres) =>
+      jsonrpc.call(NodeURLleri[ağKodu], "eth_call", [
+        {
+          to: TCKT_ADDR,
+          data: "0xc50a1514" + evm.address(adres),
+        },
+        "latest",
+      ])
+    );
+
+    // Bütün sorgular eş zamanlı olarak çalışır.
+    await Promise.all(
+      sorgular.map(async (sorgu, index) => {
+        try {
+          const handle = await sorgu;
+          sonuçlar[ağKodu][index] = handle;
+        } catch (err) {
+          console.log(`Hata oluştu: ${err}`);
+        }
+      })
+    );
   }
 
   return sonuçlar;
@@ -55,8 +62,6 @@ const handlelarıBul = async (adresler) => {
 // Adresleri alıp handleları bulur.
 fetch("https://sorular.kimlikdao.org/adresler")
   .then((res) => res.json())
-  .then(async (adresler) => {
-    const sonuçlar = await handlelarıBul(adresler);
-    console.log(sonuçlar);
-  })
-  .catch((err) => console.log(`Adresleri alırken hata oluştu: ${err}`));
+  .then(handlelarıBul)
+  .then(console.log)
+  .catch((err) => console.error(`Adresleri alırken hata oluştu: ${err}`));
